@@ -63,6 +63,39 @@ function isRevoked(user) {
   return (sub && revokedSubs.has(sub)) || (sid && revokedSids.has(sid));
 }
 
+function parseBearerToken(req) {
+  const authHeader = req.get('authorization') || '';
+  const [scheme, token] = authHeader.split(' ');
+
+  if (scheme !== 'Bearer' || !token) {
+    return null;
+  }
+
+  return token;
+}
+
+async function getUserInfoFromToken(token) {
+  const response = await fetch(`https://${auth0Domain}/userinfo`, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${token}`
+    }
+  });
+
+  if (!response.ok) {
+    return {
+      ok: false,
+      status: response.status
+    };
+  }
+
+  const user = await response.json();
+  return {
+    ok: true,
+    user
+  };
+}
+
 async function verifyLogoutToken(logoutToken) {
   if (!logoutToken || !jwks || !issuer || !auth0ClientId) {
     throw new Error('logout_token_validation_not_configured');
@@ -126,11 +159,9 @@ app.get('/api/search', (req, res) => {
   });
 });
 
-app.get('/api/dummy/profile', async (req, res) => {
-  const authHeader = req.get('authorization') || '';
-  const [scheme, token] = authHeader.split(' ');
-
-  if (scheme !== 'Bearer' || !token) {
+app.post('/api/logout', async (req, res) => {
+  const token = parseBearerToken(req);
+  if (!token) {
     return res.status(401).json({
       ok: false,
       error: 'missing_bearer_token'
@@ -145,21 +176,51 @@ app.get('/api/dummy/profile', async (req, res) => {
   }
 
   try {
-    const response = await fetch(`https://${auth0Domain}/userinfo`, {
-      method: 'GET',
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
-    });
-
-    if (!response.ok) {
-      return res.status(response.status).json({
+    const profile = await getUserInfoFromToken(token);
+    if (!profile.ok) {
+      return res.status(profile.status).json({
         ok: false,
         error: 'userinfo_request_failed'
       });
     }
 
-    const user = await response.json();
+    markRevoked(profile.user?.sub, profile.user?.sid, Math.floor(Date.now() / 1000) + 7200);
+
+    return res.status(204).send('');
+  } catch {
+    return res.status(502).json({
+      ok: false,
+      error: 'auth0_unreachable'
+    });
+  }
+});
+
+app.get('/api/dummy/profile', async (req, res) => {
+  const token = parseBearerToken(req);
+  if (!token) {
+    return res.status(401).json({
+      ok: false,
+      error: 'missing_bearer_token'
+    });
+  }
+
+  if (!auth0Domain) {
+    return res.status(500).json({
+      ok: false,
+      error: 'missing_auth0_domain'
+    });
+  }
+
+  try {
+    const profile = await getUserInfoFromToken(token);
+    if (!profile.ok) {
+      return res.status(profile.status).json({
+        ok: false,
+        error: 'userinfo_request_failed'
+      });
+    }
+
+    const user = profile.user;
     const email = typeof user?.email === 'string' ? user.email.trim() : '';
 
     if (isRevoked(user)) {
