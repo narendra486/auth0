@@ -10,8 +10,15 @@ RUN if [ -n "$VITE_AUTH0_DOMAIN" ] && [ -n "$VITE_AUTH0_CLIENT_ID" ]; then \
     fi && \
     npm run build
 
-FROM nginx:1.27-alpine
-COPY nginx.conf /etc/nginx/conf.d/default.conf
-COPY --from=build /app/dist /usr/share/nginx/html
+FROM node:20-alpine AS runtime
+WORKDIR /app
+ENV NODE_ENV=production
+ENV PORT=8000
+ARG VITE_AUTH0_DOMAIN
+ENV VITE_AUTH0_DOMAIN=$VITE_AUTH0_DOMAIN
+COPY package*.json ./
+RUN npm ci --omit=dev
+COPY server.js ./
+COPY --from=build /app/dist ./dist
 EXPOSE 8000
-CMD ["nginx", "-g", "daemon off;"]
+CMD ["npm", "run", "start"]

@@ -161,19 +161,17 @@ async function requireSessionToken() {
 }
 
 async function fetchProfileFromAuth0(accessToken) {
-  const domain = import.meta.env.VITE_AUTH0_DOMAIN;
-  const response = await fetch(`https://${domain}/userinfo`, {
-    method: 'GET',
+  const payload = await fetchJson('/api/profile', {
     headers: {
       Authorization: `Bearer ${accessToken}`
     }
   });
 
-  if (!response.ok) {
-    throw new Error(`userinfo request failed (${response.status})`);
+  if (!payload?.ok || !payload?.user) {
+    throw new Error('profile API returned invalid response');
   }
 
-  return response.json();
+  return payload.user;
 }
 
 async function login() {
@@ -483,10 +481,14 @@ function resetSearchUI() {
   setSearchStatus('', 'neutral');
 }
 
-async function fetchJson(url) {
+async function fetchJson(url, init = {}) {
   const response = await fetch(url, {
+    ...init,
     method: 'GET',
-    cache: 'no-store'
+    cache: 'no-store',
+    headers: {
+      ...(init.headers || {})
+    }
   });
 
   if (!response.ok) {
