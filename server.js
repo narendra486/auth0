@@ -1,19 +1,116 @@
 import express from 'express';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createRemoteJWKSet, jwtVerify } from 'jose';
 
 const app = express();
 const port = Number(process.env.PORT || 8000);
 const auth0Domain = process.env.VITE_AUTH0_DOMAIN || '';
+const auth0ClientId = process.env.VITE_AUTH0_CLIENT_ID || '';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const distDir = path.join(__dirname, 'dist');
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const backChannelEvent = 'http://schemas.openid.net/event/backchannel-logout';
+const revokedSubs = new Map();
+const revokedSids = new Map();
+
+const issuer = auth0Domain ? `https://${auth0Domain}/` : '';
+const jwks = auth0Domain
+  ? createRemoteJWKSet(new URL(`https://${auth0Domain}/.well-known/jwks.json`))
+  : null;
+
+app.use(express.urlencoded({ extended: false }));
 
 function isValidEmail(email) {
   return typeof email === 'string' && emailPattern.test(email.trim());
 }
+
+function purgeExpiredRevocations() {
+  const now = Math.floor(Date.now() / 1000);
+
+  for (const [key, exp] of revokedSubs) {
+    if (exp <= now) {
+      revokedSubs.delete(key);
+    }
+  }
+
+  for (const [key, exp] of revokedSids) {
+    if (exp <= now) {
+      revokedSids.delete(key);
+    }
+  }
+}
+
+function markRevoked(subject, sid, exp) {
+  const expiry = Number.isFinite(exp) ? exp : Math.floor(Date.now() / 1000) + 3600;
+
+  if (subject) {
+    revokedSubs.set(subject, expiry);
+  }
+
+  if (sid) {
+    revokedSids.set(sid, expiry);
+  }
+}
+
+function isRevoked(user) {
+  purgeExpiredRevocations();
+  const sub = typeof user?.sub === 'string' ? user.sub : '';
+  const sid = typeof user?.sid === 'string' ? user.sid : '';
+
+  return (sub && revokedSubs.has(sub)) || (sid && revokedSids.has(sid));
+}
+
+async function verifyLogoutToken(logoutToken) {
+  if (!logoutToken || !jwks || !issuer || !auth0ClientId) {
+    throw new Error('logout_token_validation_not_configured');
+  }
+
+  const { payload } = await jwtVerify(logoutToken, jwks, {
+    issuer,
+    audience: auth0ClientId
+  });
+
+  if (payload.nonce) {
+    throw new Error('logout_token_has_nonce');
+  }
+
+  const events = payload.events;
+  if (!events || typeof events !== 'object' || !(backChannelEvent in events)) {
+    throw new Error('logout_token_missing_event');
+  }
+
+  if (!payload.sub && !payload.sid) {
+    throw new Error('logout_token_missing_sub_or_sid');
+  }
+
+  return payload;
+}
+
+app.post('/auth/backchannel-logout', async (req, res) => {
+  const logoutToken = req.body?.logout_token;
+
+  if (!logoutToken) {
+    return res.status(400).json({
+      ok: false,
+      error: 'missing_logout_token'
+    });
+  }
+
+  try {
+    const payload = await verifyLogoutToken(logoutToken);
+    markRevoked(payload.sub, payload.sid, payload.exp);
+
+    return res.status(200).send('');
+  } catch (err) {
+    return res.status(400).json({
+      ok: false,
+      error: err instanceof Error ? err.message : 'invalid_logout_token'
+    });
+  }
+});
 
 app.get('/api/search', (req, res) => {
   const query = String(req.query.q || '').trim();
@@ -64,6 +161,14 @@ app.get('/api/dummy/profile', async (req, res) => {
 
     const user = await response.json();
     const email = typeof user?.email === 'string' ? user.email.trim() : '';
+
+    if (isRevoked(user)) {
+      return res.status(401).json({
+        ok: false,
+        error: 'session_revoked'
+      });
+    }
+
     if (!isValidEmail(email)) {
       return res.status(422).json({
         ok: false,
@@ -75,6 +180,7 @@ app.get('/api/dummy/profile', async (req, res) => {
       ok: true,
       user: {
         sub: user?.sub || null,
+        sid: user?.sid || null,
         name: user?.name || null,
         email,
         picture: user?.picture || null
