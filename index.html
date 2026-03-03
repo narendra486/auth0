@@ -37,7 +37,6 @@
             <button class="workspace-tab active" type="button" data-workspace-view="profile" aria-selected="true">Profile</button>
             <button class="workspace-tab" type="button" data-workspace-view="activities" aria-selected="false">Activities</button>
             <button class="workspace-tab" type="button" data-workspace-view="search" aria-selected="false">Search</button>
-            <button class="workspace-tab" type="button" data-workspace-view="dummy" aria-selected="false">Dummy Pages</button>
           </div>
 
           <section class="workspace-panel" data-workspace-panel="profile">
@@ -69,7 +68,7 @@
           <section class="workspace-panel" data-workspace-panel="search" hidden>
             <div class="activities-card" aria-label="Search">
               <h2 class="activities-title">Search</h2>
-              <p class="activities-help">Sends live request to <code>/api/dummy/search</code> on server.</p>
+              <p class="activities-help">Sends live request to <code>/api/search</code> on server.</p>
               <form id="search-form" class="activities-form">
                 <input
                   id="search-input"
@@ -84,20 +83,6 @@
               </form>
               <p id="search-status" class="activities-status"></p>
               <ul id="search-results" class="activities-list"></ul>
-            </div>
-          </section>
-
-          <section class="workspace-panel" data-workspace-panel="dummy" hidden>
-            <div class="activities-card" aria-label="Dummy Pages">
-              <h2 class="activities-title">Dummy Pages</h2>
-              <p class="activities-help">Triggers dummy server endpoints for test scenarios.</p>
-              <div class="dummy-actions">
-                <button type="button" class="activity-action-btn" data-dummy-endpoint="/api/dummy/profile">Load Profile API</button>
-                <button type="button" class="activity-action-btn" data-dummy-endpoint="/api/dummy/page-a">Open Page A API</button>
-                <button type="button" class="activity-action-btn" data-dummy-endpoint="/api/dummy/page-b">Open Page B API</button>
-              </div>
-              <p id="dummy-status" class="activities-status"></p>
-              <pre id="dummy-response" class="dummy-response">{}</pre>
             </div>
           </section>
 

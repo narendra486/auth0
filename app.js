@@ -25,14 +25,11 @@ const searchBtn = document.getElementById('search-btn');
 const searchStatus = document.getElementById('search-status');
 const searchResults = document.getElementById('search-results');
 
-const dummyActions = document.querySelector('.dummy-actions');
-const dummyStatus = document.getElementById('dummy-status');
-const dummyResponse = document.getElementById('dummy-response');
-
 const placeholderImage = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='110' height='110' viewBox='0 0 110 110'%3E%3Ccircle cx='55' cy='55' r='55' fill='%2363b3ed'/%3E%3Cpath d='M55 50c8.28 0 15-6.72 15-15s-6.72-15-15-15-15 6.72-15 15 6.72 15 15 15zm0 7.5c-10 0-30 5.02-30 15v3.75c0 2.07 1.68 3.75 3.75 3.75h52.5c2.07 0 3.75-1.68 3.75-3.75V72.5c0-9.98-20-15-30-15z' fill='%23fff'/%3E%3C/svg%3E`;
 
 let auth0Client;
 let currentUser = null;
+let profileRequestSeq = 0;
 const callbackUri = resolveCallbackUri();
 
 async function initAuth0() {
@@ -80,7 +77,6 @@ async function updateUI() {
 
     if (isAuthenticated) {
       showLoggedIn();
-      await displayProfile();
     } else {
       showLoggedOut();
     }
@@ -93,8 +89,20 @@ async function updateUI() {
 }
 
 async function displayProfile() {
+  const requestSeq = ++profileRequestSeq;
+
   try {
-    const user = await fetchProfileFromAuth0();
+    profileContainer.innerHTML = '<div class="activities-status">Checking session...</div>';
+    const accessToken = await requireSessionToken();
+    if (requestSeq !== profileRequestSeq) {
+      return;
+    }
+
+    profileContainer.innerHTML = '<div class="activities-status">Loading profile...</div>';
+    const user = await fetchProfileFromAuth0(accessToken);
+    if (requestSeq !== profileRequestSeq) {
+      return;
+    }
     currentUser = user || null;
 
     profileContainer.innerHTML = `
@@ -116,36 +124,56 @@ async function displayProfile() {
 
     initializeActivitiesForUser(currentUser);
   } catch (err) {
-    console.error('Error displaying profile:', err);
+    if (requestSeq !== profileRequestSeq) {
+      return;
+    }
+    if (err?.message === 'SESSION_REQUIRED') {
+      showLoggedOut();
+      return;
+    }
+
+    console.error('Error displaying profile from API:', err);
+    currentUser = null;
+    profileContainer.innerHTML = `
+      <div class="activities-status error">
+        Failed to load profile from API.
+      </div>
+    `;
   }
 }
 
-async function fetchProfileFromAuth0() {
-  const domain = import.meta.env.VITE_AUTH0_DOMAIN;
+async function requireSessionToken() {
+  const authenticated = await auth0Client.isAuthenticated();
+  if (!authenticated) {
+    throw new Error('SESSION_REQUIRED');
+  }
 
   try {
-    const accessToken = await auth0Client.getTokenSilently({
+    return await auth0Client.getTokenSilently({
       authorizationParams: {
         scope: 'openid profile email'
       }
     });
-
-    const response = await fetch(`https://${domain}/userinfo`, {
-      method: 'GET',
-      headers: {
-        Authorization: `Bearer ${accessToken}`
-      }
-    });
-
-    if (!response.ok) {
-      throw new Error(`userinfo request failed (${response.status})`);
-    }
-
-    return response.json();
   } catch (err) {
-    console.warn('Falling back to SDK user profile:', err);
-    return auth0Client.getUser();
+    console.warn('Session validation failed before profile request:', err);
+    throw new Error('SESSION_REQUIRED');
   }
+}
+
+async function fetchProfileFromAuth0(accessToken) {
+  const domain = import.meta.env.VITE_AUTH0_DOMAIN;
+  const response = await fetch(`https://${domain}/userinfo`, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${accessToken}`
+    }
+  });
+
+  if (!response.ok) {
+    throw new Error(`userinfo request failed (${response.status})`);
+  }
+
+  return response.json();
 }
 
 async function login() {
@@ -199,7 +227,6 @@ function showLoggedOut() {
   currentUser = null;
   resetActivitiesUI();
   resetSearchUI();
-  resetDummyUI();
 }
 
 function resolveCallbackUri() {
@@ -383,6 +410,10 @@ function switchWorkspaceView(viewName = 'profile') {
   workspacePanels.forEach((panel) => {
     panel.hidden = panel.dataset.workspacePanel !== viewName;
   });
+
+  if (viewName === 'profile' && loggedInSection?.style.display !== 'none') {
+    displayProfile();
+  }
 }
 
 async function handleSearchSubmit(event) {
@@ -403,7 +434,7 @@ async function handleSearchSubmit(event) {
 
   try {
     setSearchStatus('Searching server...', 'neutral');
-    const payload = await fetchDummyJson(`/api/dummy/search?q=${encodeURIComponent(query)}`);
+    const payload = await fetchJson(`/api/search?q=${encodeURIComponent(query)}`);
     renderSearchResults(payload);
     setSearchStatus('Search response received from server.', 'success');
   } catch (err) {
@@ -452,52 +483,7 @@ function resetSearchUI() {
   setSearchStatus('', 'neutral');
 }
 
-async function handleDummyActionClick(event) {
-  const button = event.target.closest('[data-dummy-endpoint]');
-  if (!button) {
-    return;
-  }
-
-  const endpoint = button.getAttribute('data-dummy-endpoint');
-  if (!endpoint) {
-    return;
-  }
-
-  button.disabled = true;
-  try {
-    setDummyStatus(`Requesting ${endpoint} ...`, 'neutral');
-    const payload = await fetchDummyJson(endpoint);
-
-    if (dummyResponse) {
-      dummyResponse.textContent = JSON.stringify(payload, null, 2);
-    }
-
-    setDummyStatus(`Response received from ${endpoint}`, 'success');
-  } catch (err) {
-    setDummyStatus(err.message || 'Dummy request failed.', 'error');
-  } finally {
-    button.disabled = false;
-  }
-}
-
-function setDummyStatus(message, mode = 'neutral') {
-  if (!dummyStatus) {
-    return;
-  }
-
-  dummyStatus.textContent = message;
-  dummyStatus.className = `activities-status ${mode}`;
-}
-
-function resetDummyUI() {
-  setDummyStatus('', 'neutral');
-
-  if (dummyResponse) {
-    dummyResponse.textContent = '{}';
-  }
-}
-
-async function fetchDummyJson(url) {
+async function fetchJson(url) {
   const response = await fetch(url, {
     method: 'GET',
     cache: 'no-store'
@@ -527,8 +513,6 @@ workspaceTabs.forEach((tab) => {
   tab.addEventListener('click', () => switchWorkspaceView(tab.dataset.workspaceView));
 });
 searchForm?.addEventListener('submit', handleSearchSubmit);
-dummyActions?.addEventListener('click', handleDummyActionClick);
 
 resetSearchUI();
-resetDummyUI();
 initAuth0();

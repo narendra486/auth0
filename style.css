@@ -338,25 +338,6 @@ body {
   font-size: 0.9rem;
 }
 
-.dummy-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.55rem;
-  margin-bottom: 0.65rem;
-}
-
-.dummy-response {
-  margin: 0;
-  border-radius: 10px;
-  background: #1a1e27;
-  border: 1px solid #4a5568;
-  padding: 0.75rem;
-  color: #cbd5e0;
-  max-height: 220px;
-  overflow: auto;
-  font-size: 0.82rem;
-}
-
 @keyframes fadeIn {
   from { opacity: 0; }
   to { opacity: 1; }
