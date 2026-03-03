@@ -8,19 +8,16 @@
   </head>
   <body>
     <div class="app-container">
-      <!-- Loading State -->
       <div id="loading" class="loading-state">
         <div class="loading-text">Loading...</div>
       </div>
 
-      <!-- Error State -->
       <div id="error" class="error-state" style="display: none;">
         <div class="error-title">Oops!</div>
         <div class="error-message">Something went wrong</div>
         <div id="error-details" class="error-sub-message"></div>
       </div>
 
-      <!-- Main Content -->
       <div id="app" class="main-card-wrapper" style="display: none;">
         <img
           src="https://cdn.auth0.com/quantum-assets/dist/latest/logos/auth0/auth0-lockup-en-ondark.png"
@@ -29,17 +26,81 @@
         />
         <h1 class="main-title">Welcome to Sample0</h1>
 
-        <!-- Logged Out State -->
         <div id="logged-out" class="action-card">
           <p class="action-text">Get started by signing in to your account</p>
           <button id="login-btn" class="button login">Log In</button>
         </div>
 
-        <!-- Logged In State -->
         <div id="logged-in" class="logged-in-section" style="display: none;">
           <div class="logged-in-message">✅ Successfully authenticated!</div>
-          <h2 class="profile-section-title">Your Profile</h2>
-          <div id="profile" class="profile-card"></div>
+          <div class="workspace-tabs" role="tablist" aria-label="Workspace Pages">
+            <button class="workspace-tab active" type="button" data-workspace-view="profile" aria-selected="true">Profile</button>
+            <button class="workspace-tab" type="button" data-workspace-view="activities" aria-selected="false">Activities</button>
+            <button class="workspace-tab" type="button" data-workspace-view="search" aria-selected="false">Search</button>
+            <button class="workspace-tab" type="button" data-workspace-view="dummy" aria-selected="false">Dummy Pages</button>
+          </div>
+
+          <section class="workspace-panel" data-workspace-panel="profile">
+            <h2 class="profile-section-title">Your Profile</h2>
+            <div id="profile" class="profile-card"></div>
+          </section>
+
+          <section class="workspace-panel" data-workspace-panel="activities" hidden>
+            <div class="activities-card" aria-label="Activities">
+              <h2 class="activities-title">Activities</h2>
+              <p class="activities-help">Sample tasks are preloaded for quick testing.</p>
+              <form id="activity-form" class="activities-form">
+                <input
+                  id="activity-input"
+                  type="text"
+                  class="activities-input"
+                  placeholder="Add new activity"
+                  maxlength="120"
+                  autocomplete="off"
+                  required
+                />
+                <button id="activity-add-btn" type="submit" class="button login activity-add-btn">Add</button>
+              </form>
+              <p id="activity-status" class="activities-status"></p>
+              <ul id="activity-list" class="activities-list"></ul>
+            </div>
+          </section>
+
+          <section class="workspace-panel" data-workspace-panel="search" hidden>
+            <div class="activities-card" aria-label="Search">
+              <h2 class="activities-title">Search</h2>
+              <p class="activities-help">Sends live request to <code>/api/dummy/search</code> on server.</p>
+              <form id="search-form" class="activities-form">
+                <input
+                  id="search-input"
+                  type="search"
+                  class="activities-input"
+                  placeholder="Search term (e.g. auth0)"
+                  maxlength="120"
+                  autocomplete="off"
+                  required
+                />
+                <button id="search-btn" type="submit" class="button login activity-add-btn">Search</button>
+              </form>
+              <p id="search-status" class="activities-status"></p>
+              <ul id="search-results" class="activities-list"></ul>
+            </div>
+          </section>
+
+          <section class="workspace-panel" data-workspace-panel="dummy" hidden>
+            <div class="activities-card" aria-label="Dummy Pages">
+              <h2 class="activities-title">Dummy Pages</h2>
+              <p class="activities-help">Triggers dummy server endpoints for test scenarios.</p>
+              <div class="dummy-actions">
+                <button type="button" class="activity-action-btn" data-dummy-endpoint="/api/dummy/profile">Load Profile API</button>
+                <button type="button" class="activity-action-btn" data-dummy-endpoint="/api/dummy/page-a">Open Page A API</button>
+                <button type="button" class="activity-action-btn" data-dummy-endpoint="/api/dummy/page-b">Open Page B API</button>
+              </div>
+              <p id="dummy-status" class="activities-status"></p>
+              <pre id="dummy-response" class="dummy-response">{}</pre>
+            </div>
+          </section>
+
           <button id="logout-btn" class="button logout">Log Out</button>
         </div>
       </div>

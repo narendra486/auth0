@@ -5,3 +5,11 @@ dist/
 !.env.local.example
 npm-debug.log*
 .DS_Store
+vps-recovery/
+*.pem
+*.key
+*.crt
+*.cer
+*.p12
+*.pfx
+*.jks
