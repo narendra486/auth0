@@ -103,20 +103,28 @@ async function displayProfile() {
     if (requestSeq !== profileRequestSeq) {
       return;
     }
+    const validEmail = getValidatedEmail(user?.email);
+    if (!validEmail) {
+      throw new Error('profile email is invalid');
+    }
+
     currentUser = user || null;
+    const safeName = escapeHtml(user?.name || 'User');
+    const safeEmail = escapeHtml(validEmail);
+    const safePicture = sanitizeImageUrl(user?.picture) || placeholderImage;
 
     profileContainer.innerHTML = `
       <div style="display: flex; flex-direction: column; align-items: center; gap: 1rem;">
         <img
-          src="${user?.picture || placeholderImage}"
-          alt="${user?.name || 'User'}"
+          src="${safePicture}"
+          alt="${safeName}"
           class="profile-picture"
           style="width: 110px; height: 110px; border-radius: 50%; object-fit: cover; border: 3px solid #63b3ed;"
           onerror="this.src='${placeholderImage}'"
         />
         <div style="text-align: center;">
           <div class="profile-email" style="font-size: 1.15rem; color: #a0aec0;">
-            ${user?.email || 'No email provided'}
+            ${safeEmail}
           </div>
         </div>
       </div>
@@ -161,7 +169,7 @@ async function requireSessionToken() {
 }
 
 async function fetchProfileFromAuth0(accessToken) {
-  const payload = await fetchJson('/api/profile', {
+  const payload = await fetchJson('/api/dummy/profile', {
     headers: {
       Authorization: `Bearer ${accessToken}`
     }
@@ -505,6 +513,29 @@ function escapeHtml(value) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
+}
+
+function getValidatedEmail(email) {
+  if (typeof email !== 'string') {
+    return null;
+  }
+
+  const normalized = email.trim().toLowerCase();
+  const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return emailPattern.test(normalized) ? normalized : null;
+}
+
+function sanitizeImageUrl(value) {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  if (trimmed.startsWith('https://') || trimmed.startsWith('http://') || trimmed.startsWith('data:image/')) {
+    return trimmed;
+  }
+
+  return null;
 }
 
 loginBtn.addEventListener('click', login);

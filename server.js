@@ -9,6 +9,11 @@ const auth0Domain = process.env.VITE_AUTH0_DOMAIN || '';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const distDir = path.join(__dirname, 'dist');
+const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function isValidEmail(email) {
+  return typeof email === 'string' && emailPattern.test(email.trim());
+}
 
 app.get('/api/search', (req, res) => {
   const query = String(req.query.q || '').trim();
@@ -24,7 +29,7 @@ app.get('/api/search', (req, res) => {
   });
 });
 
-app.get('/api/profile', async (req, res) => {
+app.get('/api/dummy/profile', async (req, res) => {
   const authHeader = req.get('authorization') || '';
   const [scheme, token] = authHeader.split(' ');
 
@@ -58,12 +63,20 @@ app.get('/api/profile', async (req, res) => {
     }
 
     const user = await response.json();
+    const email = typeof user?.email === 'string' ? user.email.trim() : '';
+    if (!isValidEmail(email)) {
+      return res.status(422).json({
+        ok: false,
+        error: 'invalid_email_claim'
+      });
+    }
+
     return res.json({
       ok: true,
       user: {
         sub: user?.sub || null,
         name: user?.name || null,
-        email: user?.email || null,
+        email,
         picture: user?.picture || null
       }
     });
